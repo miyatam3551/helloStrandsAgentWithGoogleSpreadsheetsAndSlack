@@ -1,10 +1,11 @@
 import json
 import os
 import boto3
+import threading
 from strands import Agent
 from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
-from services.slack_event_handler import handle_slack_event
+from services.slack_event_handler import handle_slack_event, try_mark_event_as_processed
 from utils.slack_signature_verifier import verify_slack_signature
 
 # Create SSM client at module level to reuse across Lambda invocations
@@ -19,6 +20,14 @@ def get_signing_secret():
 
     response = ssm_client.get_parameter(Name=param_name, WithDecryption=True)
     return response['Parameter']['Value']
+
+
+def process_event_async(body):
+    """バックグラウンドでイベントを処理"""
+    try:
+        handle_slack_event(body)
+    except Exception as e:
+        print(f"バックグラウンド処理エラー: {e}")
 
 
 def handler(event, context):
@@ -71,11 +80,27 @@ def handler(event, context):
                    'headers': {'Content-Type': 'application/json'}
                }
 
-           # 署名が有効な場合、イベントを処理
-           result = handle_slack_event(body)
+           # 重複チェックを先に行う（アトミック操作）
+           event_id = body.get('event_id')
+           if event_id:
+               if not try_mark_event_as_processed(event_id):
+                   # 重複イベント - 即座に200 OKを返す
+                   print(f"重複イベントをスキップ: {event_id}")
+                   return {
+                       'statusCode': 200,
+                       'body': json.dumps({'ok': True, 'message': 'duplicate event'}),
+                       'headers': {'Content-Type': 'application/json'}
+                   }
+
+           # 署名が有効な場合、バックグラウンドでイベントを処理
+           # Slackは3秒以内に200 OKを受け取らないとタイムアウトでリトライするため、
+           # 即座にレスポンスを返してから、バックグラウンドで処理を続ける
+           thread = threading.Thread(target=process_event_async, args=(body,))
+           thread.start()
+
            return {
                'statusCode': 200,
-               'body': json.dumps(result, ensure_ascii=False),
+               'body': json.dumps({'ok': True}),
                'headers': {'Content-Type': 'application/json'}
            }
 

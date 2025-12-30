@@ -111,20 +111,10 @@ def handle_slack_event(event_data: dict) -> dict:
 
     Returns:
         処理結果を含む辞書
+
+    Note:
+        重複チェックは lambda_function.py で既に実行済み
     """
-    # イベント ID を取得してアトミックに重複チェック
-    event_id = event_data.get('event_id')
-
-    if event_id:
-        # 条件付き書き込みで重複チェックとマークを同時に実行
-        if not try_mark_event_as_processed(event_id):
-            # 書き込み失敗 = 重複イベント
-            return {
-                'success': True,
-                'message': '重複イベントのためスキップしました',
-                'event_id': event_id
-            }
-
     event_type = event_data.get('event', {}).get('type')
 
     if event_type == 'app_mention':
