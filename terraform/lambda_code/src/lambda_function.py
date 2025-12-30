@@ -92,11 +92,9 @@ def handler(event, context):
                        'headers': {'Content-Type': 'application/json'}
                    }
 
-           # 署名が有効な場合、バックグラウンドでイベントを処理
-           # Slackは3秒以内に200 OKを受け取らないとタイムアウトでリトライするため、
-           # 即座にレスポンスを返してから、バックグラウンドで処理を続ける
-           thread = threading.Thread(target=process_event_async, args=(body,))
-           thread.start()
+           # 署名が有効な場合、イベントを処理
+           # 重複チェック済みなので、直接処理する
+           result = handle_slack_event(body)
 
            return {
                'statusCode': 200,
