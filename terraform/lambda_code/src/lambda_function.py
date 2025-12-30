@@ -1,14 +1,12 @@
 import json
 import os
 import boto3
-from strands import Agent
-from tools.spreadsheet_tools import add_project
-from tools.slack_tools import notify_slack
-from services.slack_event_handler import handle_slack_event
+from services.slack_event_handler import try_mark_event_as_processed
 from utils.slack_signature_verifier import verify_slack_signature
 
-# Create SSM client at module level to reuse across Lambda invocations
+# Create clients at module level to reuse across Lambda invocations
 ssm_client = boto3.client('ssm', region_name=os.environ.get('AWS_REGION', 'ap-northeast-1'))
+sfn_client = boto3.client('stepfunctions', region_name=os.environ.get('AWS_REGION', 'ap-northeast-1'))
 
 def get_signing_secret():
     """Parameter Store から Signing Secret を取得"""
@@ -71,11 +69,36 @@ def handler(event, context):
                    'headers': {'Content-Type': 'application/json'}
                }
 
-           # 署名が有効な場合、イベントを処理
-           result = handle_slack_event(body)
+           # 重複チェックを先に行う（アトミック操作）
+           event_id = body.get('event_id')
+           if event_id:
+               if not try_mark_event_as_processed(event_id):
+                   # 重複イベント - 即座に200 OKを返す
+                   print(f"重複イベントをスキップ: {event_id}")
+                   return {
+                       'statusCode': 200,
+                       'body': json.dumps({'ok': True, 'message': 'duplicate event'}),
+                       'headers': {'Content-Type': 'application/json'}
+                   }
+
+           # 署名が有効な場合、Step Functionsで非同期処理を開始
+           # 重複チェック済みなので、Step Functionsを起動
+           state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
+           if not state_machine_arn:
+               raise ValueError("環境変数 STATE_MACHINE_ARN が設定されていません")
+
+           # Step Functions実行を開始（非同期）
+           execution_response = sfn_client.start_execution(
+               stateMachineArn=state_machine_arn,
+               input=json.dumps(body)
+           )
+
+           print(f"Step Functions実行開始: {execution_response['executionArn']}")
+
+           # 即座に200 OKを返す（Slackがタイムアウトしない）
            return {
                'statusCode': 200,
-               'body': json.dumps(result, ensure_ascii=False),
+               'body': json.dumps({'ok': True}),
                'headers': {'Content-Type': 'application/json'}
            }
 
