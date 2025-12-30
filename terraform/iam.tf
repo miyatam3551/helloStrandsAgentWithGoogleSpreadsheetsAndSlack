@@ -84,7 +84,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
          "dynamodb:GetItem",
          "dynamodb:PutItem"
        ]
-       Resource = "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/${var.agent_name}-slack-events"
+       Resource = aws_dynamodb_table.slack_events.arn
      }
    ]
  })
@@ -103,7 +103,7 @@ resource "aws_iam_role_policy" "lambda_stepfunctions_access" {
        Action = [
          "states:StartExecution"
        ]
-       Resource = "arn:aws:states:${var.aws_region}:${var.aws_account_id}:stateMachine:${var.agent_name}-event-processor"
+       Resource = aws_sfn_state_machine.slack_event_processor.arn
      }
    ]
  })
