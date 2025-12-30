@@ -11,13 +11,6 @@ resource "aws_apigatewayv2_integration" "lambda" {
  integration_uri  = aws_lambda_function.agent.invoke_arn
 }
 
-# POSTメソッドのルートを作成
-resource "aws_apigatewayv2_route" "post" {
- api_id    = aws_apigatewayv2_api.agent_api.id
- route_key = "POST /invoke"
- target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-}
-
 # Slack Events API用のルートを作成
 resource "aws_apigatewayv2_route" "slack_events" {
  api_id    = aws_apigatewayv2_api.agent_api.id
