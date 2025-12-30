@@ -645,6 +645,81 @@ curl -X POST https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/invoke \
 
 ---
 
+## 8. Slack メンション機能の設定
+
+**なぜこのステップが必要？**
+- Slack でボットをメンションした際に、AI エージェントが自動応答できるようにします
+- Event Subscriptions を設定することで、メンションイベントを Lambda 関数で受け取れます
+
+**前提条件:**
+- [前提条件 → 5-2. Slack Bot Token の取得](#5-2-slack-bot-token-の取得) で Slack App を作成済みであること
+- Terraform で Lambda 関数と API Gateway がデプロイ済みであること
+
+### 8-1. Event Subscriptions の設定
+
+1. [Slack API](https://api.slack.com/apps) にアクセスし、作成した App を選択
+2. 「Event Subscriptions」に移動
+3. 「Enable Events」をオンにする
+4. **Request URL** を設定：
+
+   エンドポイント URL を取得するには：
+   ```bash
+   cd terraform
+   terraform output slack_events_endpoint
+   ```
+
+   出力された URL（例: `https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/slack/events`）を Request URL に入力します
+
+5. URL を入力すると、Slack が検証リクエストを送信します
+   - ✅ "Verified" と表示されれば成功
+
+6. 「Subscribe to bot events」で以下のイベントを追加：
+   - `app_mention` - ボットがメンションされた時
+
+7. 「Save Changes」をクリック
+
+### 8-2. Bot をチャンネルに追加
+
+メンションを受け取りたいチャンネルで、以下のコマンドを実行：
+
+```
+/invite @your-bot-name
+```
+
+### 8-3. 動作確認
+
+Slack チャンネルでボットをメンションしてみましょう：
+
+```
+@your-bot-name こんにちは！
+```
+
+ボットが応答すれば成功です！
+
+**テスト例:**
+
+**基本的な会話:**
+```
+@your-bot-name 今日の天気はどうですか？
+```
+
+**スプレッドシートへの追加:**
+```
+@your-bot-name プロジェクト名「新機能開発」をスプレッドシートに追加してください
+```
+
+**Slack 通知:**
+```
+@your-bot-name #general チャンネルに「テスト完了」と通知してください
+```
+
+**複数ツールの連携:**
+```
+@your-bot-name 新しいプロジェクト「API改善」をシートに追加して、#team チャンネルに通知してください
+```
+
+---
+
 ## 🐛 トラブルシューティング
 
 ### API リクエストが 500 エラーを返す
