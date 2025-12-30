@@ -8,13 +8,8 @@ from services.slack_event_handler import handle_slack_event
 def handler(event, context):
    """Lambda ハンドラー関数"""
    try:
-       # デバッグ: イベント全体をログ出力
-       print(f"[DEBUG] event: {json.dumps(event, ensure_ascii=False)}")
-
        # イベントからボディを取得
        body = json.loads(event.get('body', '{}'))
-       print(f"[DEBUG] body: {json.dumps(body, ensure_ascii=False)}")
-       print(f"[DEBUG] 'challenge' in body: {'challenge' in body}")
 
        # Slack Events API のチャレンジレスポンスを処理
        if 'challenge' in body:
