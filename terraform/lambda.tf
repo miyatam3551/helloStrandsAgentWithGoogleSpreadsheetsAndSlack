@@ -13,7 +13,7 @@ resource "aws_lambda_function" "agent" {
 
   environment {
     variables = {
-      BEDROCK_REGION              = var.aws_region
+      AWS_REGION                  = var.aws_region
       BEDROCK_MODEL_ID            = var.bedrock_model_id
       PARAM_SPREADSHEET_ID        = var.param_spreadsheet_id
       PARAM_GOOGLE_CREDENTIALS    = var.param_google_credentials
