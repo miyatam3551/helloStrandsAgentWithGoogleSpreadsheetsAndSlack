@@ -902,6 +902,40 @@ END RequestId: xxx
 ```
 
 
+## 🧪 統合テスト
+
+このプロジェクトには、以下の機能を検証する統合テストが含まれています：
+
+- ✅ 同じ event_id の重複リクエスト検出
+- ✅ Step Functions の実行確認
+- ✅ DynamoDB によるイベント重複管理
+- ✅ Lambda と Step Functions の連携
+
+### テストの実行
+
+**前提条件:**
+- AWS リソースが Terraform でデプロイされていること
+- AWS 認証情報が設定されていること
+
+**クイックスタート:**
+
+```bash
+# 1. テスト依存関係のインストール
+pip install -r tests/requirements-test.txt
+
+# 2. 環境変数のセットアップ
+./setup_test_env.sh
+
+# 3. テストの実行
+pytest tests/integration/ -v
+```
+
+**詳細なドキュメント:**
+- [統合テストの詳細](tests/README.md)
+- [実装内容の説明](INTEGRATION_TESTS.md)
+
+---
+
 ## 🧹 クリーンアップ
 
 リソースを削除してコストを節約：
