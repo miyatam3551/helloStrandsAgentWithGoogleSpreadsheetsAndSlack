@@ -84,9 +84,7 @@ resource "aws_sfn_state_machine" "slack_event_processor" {
         Resource = "arn:aws:states:::lambda:invoke"
         Parameters = {
           FunctionName = aws_lambda_function.processor.arn
-          Payload = {
-            "Input.$" = "$"
-          }
+          "Payload.$" = "$"
         }
         Retry = [
           {
