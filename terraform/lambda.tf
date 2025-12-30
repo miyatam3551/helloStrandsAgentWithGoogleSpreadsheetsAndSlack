@@ -18,6 +18,7 @@ resource "aws_lambda_function" "agent" {
       PARAM_SPREADSHEET_ID     = var.param_spreadsheet_id
       PARAM_GOOGLE_CREDENTIALS = var.param_google_credentials
       PARAM_SLACK_BOT_TOKEN    = var.param_slack_bot_token
+      DYNAMODB_TABLE_NAME      = aws_dynamodb_table.slack_events.name
     }
   }
 

@@ -68,3 +68,24 @@ resource "aws_iam_role_policy" "lambda_ssm_access" {
    ]
  })
 }
+
+# DynamoDB へのアクセス権限を付与（イベント重複検出用）
+resource "aws_iam_role_policy" "lambda_dynamodb_access" {
+ name = "${var.agent_name}-dynamodb-access"
+ role = aws_iam_role.lambda_execution_role.id
+
+ policy = jsonencode({
+   Version = "2012-10-17"
+   Statement = [
+     {
+       Effect = "Allow"
+       Action = [
+         "dynamodb:GetItem",
+         "dynamodb:PutItem",
+         "dynamodb:Query"
+       ]
+       Resource = "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/${var.agent_name}-slack-events"
+     }
+   ]
+ })
+}
