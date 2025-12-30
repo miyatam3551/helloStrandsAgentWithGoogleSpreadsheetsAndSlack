@@ -38,3 +38,9 @@ variable "param_slack_bot_token" {
  type        = string
  sensitive   = true
 }
+
+variable "param_slack_signing_secret" {
+ description = "Parameter Store パス: Slack Signing Secret"
+ type        = string
+ sensitive   = true
+}

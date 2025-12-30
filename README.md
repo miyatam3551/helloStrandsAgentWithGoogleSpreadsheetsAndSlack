@@ -254,7 +254,7 @@ aws sso login
 3. サービスアカウントのメールアドレス（`xxx@xxx.iam.gserviceaccount.com`）を追加
 4. 「編集者」権限を付与
 
-#### 5-2. Slack Bot Token の取得
+#### 5-2. Slack Bot Token と Signing Secret の取得
 
 1. [Slack API](https://api.slack.com/apps) にアクセス
 2. 「Create New App」→「From scratch」
@@ -264,6 +264,9 @@ aws sso login
    - `chat:write.public`
 5. 「Install to Workspace」をクリック
 6. 表示される「Bot User OAuth Token」（`xoxb-` で始まる）をコピー
+7. 「Basic Information」→「App Credentials」から「Signing Secret」を取得
+   - Signing Secret は Slack からのリクエストを検証するために使用されます
+   - この秘密鍵により、悪意のあるユーザーによる偽のリクエストを防ぎます
 
 #### 5-3. Spreadsheet ID の確認
 
@@ -347,6 +350,7 @@ TF_VAR_aws_account_id="123456789012"
 TF_VAR_param_spreadsheet_id="/your-prefix/spreadsheet-id"
 TF_VAR_param_google_credentials="/your-prefix/google-credentials"
 TF_VAR_param_slack_bot_token="/your-prefix/slack-bot-token"
+TF_VAR_param_slack_signing_secret="/your-prefix/slack-signing-secret"
 ```
 
 **設定項目の説明:**
@@ -376,6 +380,7 @@ aws sts get-caller-identity --query Account --output text
 - [前提条件 → 5. 認証情報の準備](#5-認証情報の準備) で以下を準備済みであること：
   - `credentials/service-account-key.json` （Google サービスアカウント認証情報）
   - Slack Bot Token （`xoxb-` で始まるトークン）
+  - Slack Signing Secret （Slack App の Basic Information から取得）
   - Spreadsheet ID
 
 #### 4-1. Parameter Store への保存コマンド
@@ -404,6 +409,13 @@ aws sts get-caller-identity --query Account --output text
   --value "your-spreadsheet-id-here"
   --type "SecureString"
   --overwrite)
+
+# Slack Signing Secret を保存
+(aws ssm put-parameter
+  --name $env.TF_VAR_param_slack_signing_secret
+  --value "your-signing-secret-here"
+  --type "SecureString"
+  --overwrite)
 ```
 
 **bash の場合:**
@@ -427,6 +439,13 @@ aws ssm put-parameter \
 aws ssm put-parameter \
   --name "$TF_VAR_param_spreadsheet_id" \
   --value "your-spreadsheet-id-here" \
+  --type "SecureString" \
+  --overwrite
+
+# Slack Signing Secret を保存
+aws ssm put-parameter \
+  --name "$TF_VAR_param_slack_signing_secret" \
+  --value "your-signing-secret-here" \
   --type "SecureString" \
   --overwrite
 ```
