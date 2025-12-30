@@ -18,6 +18,13 @@ resource "aws_apigatewayv2_route" "post" {
  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+# Slack Events API用のルートを作成
+resource "aws_apigatewayv2_route" "slack_events" {
+ api_id    = aws_apigatewayv2_api.agent_api.id
+ route_key = "POST /slack/events"
+ target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
 # デフォルトステージを作成
 resource "aws_apigatewayv2_stage" "default" {
  api_id      = aws_apigatewayv2_api.agent_api.id
