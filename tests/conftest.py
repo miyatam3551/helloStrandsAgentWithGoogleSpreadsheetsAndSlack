@@ -57,8 +57,9 @@ def aws_resources(aws_region):
     
     if not table_name or not state_machine_arn or not lambda_function_name:
         pytest.skip(
-            "AWS resources not configured. Set DYNAMODB_TABLE_NAME, "
-            "STATE_MACHINE_ARN, and LAMBDA_FUNCTION_NAME environment variables"
+            "AWS resources not configured. Please set environment variables:\n"
+            "  DYNAMODB_TABLE_NAME, STATE_MACHINE_ARN, LAMBDA_FUNCTION_NAME\n"
+            "Run './setup_test_env.sh' to automatically configure from Terraform outputs."
         )
     
     return {

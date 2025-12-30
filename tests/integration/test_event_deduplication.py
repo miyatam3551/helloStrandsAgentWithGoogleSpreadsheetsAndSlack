@@ -250,10 +250,10 @@ class TestStepFunctionsExecution:
         event_id = generate_unique_event_id("test_sfn_complete")
         
         # Create simple Slack event to avoid actual Slack/Sheets calls during test
-        # Simple greeting text that the AI agent can respond to without external tools
+        # Using a simple greeting that the AI agent can respond to without external tool calls
         slack_payload = create_slack_event_payload(
             event_id=event_id,
-            text="こんにちは"  # Simple Japanese greeting
+            text="hello"  # Simple English greeting for test environment
         )
         
         api_event = create_api_gateway_event(slack_payload, SIGNING_SECRET)
