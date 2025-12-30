@@ -8,7 +8,7 @@ from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
 
 # DynamoDB クライアントの初期化
-dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('BEDROCK_REGION', 'us-east-1'))
+dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('DYNAMODB_REGION') or os.environ.get('AWS_REGION', 'us-east-1'))
 table_name = os.environ.get('DYNAMODB_TABLE_NAME')
 
 
