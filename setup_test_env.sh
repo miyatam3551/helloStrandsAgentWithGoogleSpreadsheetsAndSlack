@@ -2,7 +2,7 @@
 # Setup script for integration tests
 # This script extracts Terraform outputs and sets environment variables
 
-set -e
+set -euo pipefail  # Exit on error, undefined variables, and pipe failures
 
 # Colors for output
 GREEN='\033[0;32m'

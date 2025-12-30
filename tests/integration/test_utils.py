@@ -26,6 +26,18 @@ def generate_slack_signature(signing_secret: str, timestamp: str, body: str) -> 
     return signature
 
 
+def generate_unique_event_id(prefix: str = "test") -> str:
+    """Generate a unique event ID for testing
+    
+    Args:
+        prefix: Prefix for the event ID
+        
+    Returns:
+        Unique event ID string
+    """
+    return f"{prefix}_{int(time.time() * 1000)}"
+
+
 def create_slack_event_payload(
     event_type: str = "app_mention",
     event_id: str = None,
@@ -46,7 +58,7 @@ def create_slack_event_payload(
         Dictionary representing Slack Events API payload
     """
     if event_id is None:
-        event_id = f"Ev{int(time.time() * 1000000)}"
+        event_id = generate_unique_event_id("Ev")
     
     return {
         "token": "test_verification_token",

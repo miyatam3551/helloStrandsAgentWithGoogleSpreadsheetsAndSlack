@@ -8,52 +8,24 @@ This test suite verifies:
 import json
 import os
 import time
-import boto3
 import pytest
-from typing import Dict, Any
 
 from .test_utils import (
     create_slack_event_payload,
-    create_api_gateway_event
+    create_api_gateway_event,
+    generate_unique_event_id
 )
+from tests.conftest import count_recent_executions
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
 
-
-# Test configuration
-SIGNING_SECRET = "test_signing_secret_12345"
-AWS_REGION = os.environ.get('AWS_REGION', 'ap-northeast-1')
+# Test configuration - use environment variable for signing secret in production
+SIGNING_SECRET = os.environ.get('TEST_SLACK_SIGNING_SECRET', 'test_signing_secret_12345')
 
 
 class TestDuplicateEventDetection:
     """Test suite for duplicate event_id detection"""
-    
-    @pytest.fixture(scope="class")
-    def aws_resources(self):
-        """Setup AWS resources for testing"""
-        # Initialize AWS clients
-        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-        sfn_client = boto3.client('stepfunctions', region_name=AWS_REGION)
-        lambda_client = boto3.client('lambda', region_name=AWS_REGION)
-        
-        # Get resource names from environment or Terraform outputs
-        table_name = os.environ.get('DYNAMODB_TABLE_NAME')
-        state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
-        lambda_function_name = os.environ.get('LAMBDA_FUNCTION_NAME')
-        
-        if not table_name or not state_machine_arn or not lambda_function_name:
-            pytest.skip("AWS resources not configured. Set DYNAMODB_TABLE_NAME, STATE_MACHINE_ARN, and LAMBDA_FUNCTION_NAME environment variables")
-        
-        return {
-            'dynamodb': dynamodb,
-            'sfn_client': sfn_client,
-            'lambda_client': lambda_client,
-            'table_name': table_name,
-            'state_machine_arn': state_machine_arn,
-            'lambda_function_name': lambda_function_name,
-            'table': dynamodb.Table(table_name)
-        }
     
     def test_duplicate_event_id_rejected(self, aws_resources):
         """Test that duplicate event_id is rejected and not processed twice
@@ -65,7 +37,7 @@ class TestDuplicateEventDetection:
         4. Only one Step Functions execution is triggered
         """
         # Generate unique event_id for this test
-        event_id = f"test_duplicate_{int(time.time() * 1000)}"
+        event_id = generate_unique_event_id("test_duplicate")
         
         # Create Slack event payload
         slack_payload = create_slack_event_payload(
@@ -77,7 +49,7 @@ class TestDuplicateEventDetection:
         api_event = create_api_gateway_event(slack_payload, SIGNING_SECRET)
         
         # Get current Step Functions execution count
-        executions_before = self._count_recent_executions(
+        executions_before = count_recent_executions(
             aws_resources['sfn_client'],
             aws_resources['state_machine_arn']
         )
@@ -119,7 +91,7 @@ class TestDuplicateEventDetection:
         time.sleep(2)
         
         # Verify only one Step Functions execution was triggered
-        executions_after = self._count_recent_executions(
+        executions_after = count_recent_executions(
             aws_resources['sfn_client'],
             aws_resources['state_machine_arn']
         )
@@ -137,8 +109,8 @@ class TestDuplicateEventDetection:
         3. Two Step Functions executions are triggered
         """
         # Generate two unique event_ids
-        event_id1 = f"test_event1_{int(time.time() * 1000)}"
-        event_id2 = f"test_event2_{int(time.time() * 1000 + 1)}"
+        event_id1 = generate_unique_event_id("test_event1")
+        event_id2 = generate_unique_event_id("test_event2")
         
         # Create payloads
         slack_payload1 = create_slack_event_payload(event_id=event_id1, text="First event")
@@ -148,7 +120,7 @@ class TestDuplicateEventDetection:
         api_event2 = create_api_gateway_event(slack_payload2, SIGNING_SECRET)
         
         # Get current execution count
-        executions_before = self._count_recent_executions(
+        executions_before = count_recent_executions(
             aws_resources['sfn_client'],
             aws_resources['state_machine_arn']
         )
@@ -187,69 +159,17 @@ class TestDuplicateEventDetection:
         time.sleep(2)
         
         # Verify two Step Functions executions were triggered
-        executions_after = self._count_recent_executions(
+        executions_after = count_recent_executions(
             aws_resources['sfn_client'],
             aws_resources['state_machine_arn']
         )
         
         assert executions_after == executions_before + 2, \
             f"Expected 2 new executions, but got {executions_after - executions_before}"
-    
-    def _count_recent_executions(self, sfn_client, state_machine_arn: str, seconds: int = 60) -> int:
-        """Count Step Functions executions in the last N seconds
-        
-        Args:
-            sfn_client: Boto3 Step Functions client
-            state_machine_arn: ARN of the state machine
-            seconds: Time window to check (default 60 seconds)
-            
-        Returns:
-            Number of executions
-        """
-        try:
-            response = sfn_client.list_executions(
-                stateMachineArn=state_machine_arn,
-                maxResults=100
-            )
-            
-            current_time = time.time()
-            recent_executions = [
-                e for e in response['executions']
-                if (current_time - e['startDate'].timestamp()) < seconds
-            ]
-            
-            return len(recent_executions)
-        except Exception as e:
-            print(f"Warning: Could not count executions: {e}")
-            return 0
 
 
 class TestStepFunctionsExecution:
     """Test suite for Step Functions execution verification"""
-    
-    @pytest.fixture(scope="class")
-    def aws_resources(self):
-        """Setup AWS resources for testing"""
-        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-        sfn_client = boto3.client('stepfunctions', region_name=AWS_REGION)
-        lambda_client = boto3.client('lambda', region_name=AWS_REGION)
-        
-        table_name = os.environ.get('DYNAMODB_TABLE_NAME')
-        state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
-        lambda_function_name = os.environ.get('LAMBDA_FUNCTION_NAME')
-        
-        if not table_name or not state_machine_arn or not lambda_function_name:
-            pytest.skip("AWS resources not configured")
-        
-        return {
-            'dynamodb': dynamodb,
-            'sfn_client': sfn_client,
-            'lambda_client': lambda_client,
-            'table_name': table_name,
-            'state_machine_arn': state_machine_arn,
-            'lambda_function_name': lambda_function_name,
-            'table': dynamodb.Table(table_name)
-        }
     
     def test_step_functions_triggered_on_valid_request(self, aws_resources):
         """Test that Step Functions execution is triggered on valid request
@@ -260,7 +180,7 @@ class TestStepFunctionsExecution:
         3. Execution ARN is logged
         """
         # Generate unique event_id
-        event_id = f"test_sfn_{int(time.time() * 1000)}"
+        event_id = generate_unique_event_id("test_sfn")
         
         # Create Slack event
         slack_payload = create_slack_event_payload(
@@ -323,15 +243,17 @@ class TestStepFunctionsExecution:
         2. Processor Lambda is invoked
         3. No errors occur during execution
         
-        Note: This test may take longer as it waits for execution to complete
+        Note: This test may take longer as it waits for execution to complete.
+        Uses a simple greeting text that won't trigger external tool calls.
         """
         # Generate unique event_id
-        event_id = f"test_sfn_complete_{int(time.time() * 1000)}"
+        event_id = generate_unique_event_id("test_sfn_complete")
         
-        # Create simple Slack event (to avoid actual Slack/Sheets calls in test)
+        # Create simple Slack event to avoid actual Slack/Sheets calls during test
+        # Simple greeting text that the AI agent can respond to without external tools
         slack_payload = create_slack_event_payload(
             event_id=event_id,
-            text="こんにちは"  # Simple greeting that won't trigger tool calls
+            text="こんにちは"  # Simple Japanese greeting
         )
         
         api_event = create_api_gateway_event(slack_payload, SIGNING_SECRET)
