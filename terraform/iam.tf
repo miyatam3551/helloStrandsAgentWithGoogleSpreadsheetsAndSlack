@@ -89,3 +89,22 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
    ]
  })
 }
+
+# Step Functions へのアクセス権限を付与（受付Lambda用）
+resource "aws_iam_role_policy" "lambda_stepfunctions_access" {
+ name = "${var.agent_name}-stepfunctions-access"
+ role = aws_iam_role.lambda_execution_role.id
+
+ policy = jsonencode({
+   Version = "2012-10-17"
+   Statement = [
+     {
+       Effect = "Allow"
+       Action = [
+         "states:StartExecution"
+       ]
+       Resource = "arn:aws:states:${var.aws_region}:${var.aws_account_id}:stateMachine:${var.agent_name}-event-processor"
+     }
+   ]
+ })
+}

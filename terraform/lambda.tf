@@ -19,6 +19,7 @@ resource "aws_lambda_function" "agent" {
       PARAM_SLACK_BOT_TOKEN       = var.param_slack_bot_token
       SLACK_SIGNING_SECRET_PARAM  = var.param_slack_signing_secret
       DYNAMODB_TABLE_NAME         = aws_dynamodb_table.slack_events.name
+      STATE_MACHINE_ARN           = aws_sfn_state_machine.slack_event_processor.arn
     }
   }
 
