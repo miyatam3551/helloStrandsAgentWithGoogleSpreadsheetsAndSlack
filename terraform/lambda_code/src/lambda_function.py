@@ -7,15 +7,17 @@ from tools.slack_tools import notify_slack
 from services.slack_event_handler import handle_slack_event
 from utils.slack_signature_verifier import verify_slack_signature
 
+# Create SSM client at module level to reuse across Lambda invocations
+ssm_client = boto3.client('ssm', region_name=os.environ.get('AWS_REGION', 'ap-northeast-1'))
+
 def get_signing_secret():
     """Parameter Store から Signing Secret を取得"""
-    ssm = boto3.client('ssm', region_name=os.environ.get('AWS_REGION', 'ap-northeast-1'))
     param_name = os.environ.get('SLACK_SIGNING_SECRET_PARAM')
 
     if not param_name:
         raise ValueError("環境変数 SLACK_SIGNING_SECRET_PARAM が設定されていません")
 
-    response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+    response = ssm_client.get_parameter(Name=param_name, WithDecryption=True)
     return response['Parameter']['Value']
 
 
