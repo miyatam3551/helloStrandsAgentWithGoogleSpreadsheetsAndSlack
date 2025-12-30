@@ -81,8 +81,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
        Effect = "Allow"
        Action = [
          "dynamodb:GetItem",
-         "dynamodb:PutItem",
-         "dynamodb:Query"
+         "dynamodb:PutItem"
        ]
        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/${var.agent_name}-slack-events"
      }
