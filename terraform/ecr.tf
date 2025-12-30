@@ -61,8 +61,8 @@ resource "null_resource" "docker_build_and_push" {
       # Docker イメージをビルド（arm64 アーキテクチャ用）
       docker buildx build --platform linux/arm64 \
         -t ${aws_ecr_repository.lambda_repository.repository_url}:latest \
-        -f ${path.module}/../Dockerfile \
-        ${path.module}/..
+        -f ${path.module}/lambda_code/Dockerfile \
+        ${path.module}/lambda_code
 
       # ECR にプッシュ
       docker push ${aws_ecr_repository.lambda_repository.repository_url}:latest
