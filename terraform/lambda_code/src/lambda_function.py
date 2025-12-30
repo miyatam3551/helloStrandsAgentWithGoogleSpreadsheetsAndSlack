@@ -77,22 +77,14 @@ def handler(event, context):
                'headers': {'Content-Type': 'application/json'}
            }
 
-       # 従来の直接呼び出し（HTTP POST /invoke）を処理
-       prompt = body.get('prompt', 'テスト')
-
-       # エージェントを初期化
-       agent = Agent(
-           system_prompt="あなたは親切なアシスタントです。Google Spreadsheet や Slack を操作できます。",
-           tools=[add_project, notify_slack],
-           model=os.environ.get('BEDROCK_MODEL_ID')
-       )
-
-       # プロンプトを処理
-       response = agent(prompt)
-
+       # 認証されていないリクエストを拒否
+       # Slack Events API 以外のリクエストは受け付けない
        return {
-           'statusCode': 200,
-           'body': json.dumps({'message': str(response)}, ensure_ascii=False),
+           'statusCode': 403,
+           'body': json.dumps({
+               'error': 'Forbidden',
+               'message': 'このエンドポイントは Slack Events API からのリクエストのみ受け付けます。'
+           }, ensure_ascii=False),
            'headers': {'Content-Type': 'application/json'}
        }
    except Exception as e:

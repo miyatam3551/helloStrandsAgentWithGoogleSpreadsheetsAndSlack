@@ -737,6 +737,80 @@ Slack チャンネルでボットをメンションしてみましょう：
 @your-bot-name 新しいプロジェクト「API改善」をシートに追加して、#team チャンネルに通知してください
 ```
 
+### 8-4. Slack署名検証のセキュリティ機構
+
+**なぜ署名検証が重要なのか？**
+
+このアプリケーションは、Slack Events APIからのリクエストのみを処理するよう設計されています。署名検証により、以下の攻撃を防ぎます：
+
+- **なりすまし攻撃**: 悪意のあるユーザーが偽のリクエストを送信
+- **リプレイ攻撃**: 過去のリクエストを再送信して不正操作
+- **タイミング攻撃**: 署名比較の処理時間から秘密鍵を推測
+
+#### 技術詳細
+
+**1. HMAC-SHA256 による署名検証**
+
+Slackは、リクエストごとに以下の手順で署名を生成します：
+
+1. ベース文字列の作成: `v0:{timestamp}:{request_body}`
+2. HMAC-SHA256で署名: `HMAC-SHA256(signing_secret, base_string)`
+3. HTTPヘッダーに付与: `X-Slack-Signature: v0={署名}`
+
+Lambda関数は、同じ手順で署名を再計算し、一致することを確認します。
+
+**実装コード（`utils/slack_signature_verifier.py`）:**
+
+```python
+# 署名のベース文字列を作成
+sig_basestring = f"v0:{timestamp}:{body}"
+
+# HMAC-SHA256 で署名を計算
+computed_signature = 'v0=' + hmac.new(
+    signing_secret.encode('utf-8'),
+    sig_basestring.encode('utf-8'),
+    hashlib.sha256
+).hexdigest()
+
+# 署名を比較（タイミング攻撃を防ぐため hmac.compare_digest を使用）
+return hmac.compare_digest(computed_signature, signature)
+```
+
+**2. タイムスタンプ検証（リプレイ攻撃対策）**
+
+リクエストのタイムスタンプが5分以上古い場合は拒否します：
+
+```python
+current_timestamp = int(time.time())
+request_timestamp = int(timestamp)
+
+if abs(current_timestamp - request_timestamp) > 60 * 5:
+    raise ValueError("リクエストのタイムスタンプが古すぎます")
+```
+
+これにより、攻撃者が過去の正当なリクエストを盗聴して再送信する「リプレイ攻撃」を防ぎます。
+
+**3. タイミング攻撃対策**
+
+`hmac.compare_digest()` を使用することで、文字列比較の処理時間から秘密鍵を推測する攻撃を防ぎます。
+
+通常の `==` 演算子は、最初の不一致文字で比較を終了するため、処理時間から秘密鍵の情報が漏洩する可能性があります。`compare_digest()` は、常に全体を比較するため、タイミング情報を漏らしません。
+
+#### 認証されていないリクエストへの対応
+
+**重要:** このアプリケーションは、Slack Events API からのリクエストのみを受け付けます。
+
+従来の `/invoke` エンドポイント（認証なしの直接呼び出し）は**削除されました**。認証されていないリクエストは、以下のエラーレスポンスを返します：
+
+```json
+{
+  "error": "Forbidden",
+  "message": "このエンドポイントは Slack Events API からのリクエストのみ受け付けます。"
+}
+```
+
+**HTTP ステータスコード:** 403 Forbidden
+
 ---
 
 ## 🐛 トラブルシューティング
@@ -754,6 +828,78 @@ aws logs tail /aws/lambda/hello-agent --follow
 - 環境変数の設定ミス
 - Bedrock モデル ID の間違い
 - Google Sheets / Slack の認証情報が未設定
+
+### Slack署名検証エラー
+
+**症状:**
+- Slackでメンションしても応答がない
+- CloudWatch Logsに "Invalid Slack signature" エラー
+
+**原因と対処法:**
+
+1. **Signing Secretが間違っている**
+
+   ```bash
+   # Parameter Storeの値を確認
+   aws ssm get-parameter --name "/your-prefix/slack-signing-secret" --with-decryption --query "Parameter.Value" --output text
+   ```
+
+   Slack AppのBasic Information → App Credentials → Signing Secretと一致することを確認。
+
+2. **タイムスタンプが古すぎる（リプレイ攻撃検出）**
+
+   **エラーメッセージ例:**
+   ```
+   リクエストのタイムスタンプが古すぎます。現在時刻: 1234567890, リクエスト時刻: 1234567590
+   ```
+
+   **原因:**
+   - Lambda関数の実行時間が5分を超えている（Cold Start等）
+   - システムクロックのずれ
+
+   **対処法:**
+   - Lambda関数のタイムアウト設定を確認（デフォルト: 30秒）
+   - 問題が継続する場合はAWSサポートに連絡
+
+3. **リクエストボディが改変されている**
+
+   **原因:**
+   - API Gateway の設定で bodyがbase64エンコードされている
+   - 文字エンコーディングの不一致
+
+   **対処法:**
+   - API Gateway の統合設定を確認（AWS_PROXY統合を使用）
+   - リクエストボディを生のまま渡す設定になっているか確認
+
+#### 検証方法
+
+**1. 実際のSlackからのテスト（推奨）**
+
+Slackチャンネルでボットをメンションすることで、署名付きリクエストをテストできます：
+
+```
+@your-bot-name こんにちは！
+```
+
+**2. CloudWatch Logsでの検証**
+
+```bash
+# Lambda関数のログを確認
+aws logs tail /aws/lambda/hello-agent --follow
+```
+
+**成功時のログ例:**
+```
+START RequestId: xxx Version: $LATEST
+イベントタイプ: app_mention
+メンション応答送信: チャンネルID=C12345678
+END RequestId: xxx
+```
+
+**失敗時のログ例:**
+```
+署名検証失敗: Invalid Slack signature
+```
 
 
 ## 🧹 クリーンアップ
