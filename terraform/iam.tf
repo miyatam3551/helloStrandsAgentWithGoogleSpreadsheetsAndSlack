@@ -62,7 +62,8 @@ resource "aws_iam_role_policy" "lambda_ssm_access" {
        Resource = [
          "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_spreadsheet_id}",
          "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_google_credentials}",
-         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_slack_bot_token}"
+         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_slack_bot_token}",
+         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_slack_signing_secret}"
        ]
      }
    ]

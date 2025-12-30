@@ -13,11 +13,12 @@ resource "aws_lambda_function" "agent" {
 
   environment {
     variables = {
-      BEDROCK_REGION           = var.aws_region
-      BEDROCK_MODEL_ID         = var.bedrock_model_id
-      PARAM_SPREADSHEET_ID     = var.param_spreadsheet_id
-      PARAM_GOOGLE_CREDENTIALS = var.param_google_credentials
-      PARAM_SLACK_BOT_TOKEN    = var.param_slack_bot_token
+      AWS_REGION                  = var.aws_region
+      BEDROCK_MODEL_ID            = var.bedrock_model_id
+      PARAM_SPREADSHEET_ID        = var.param_spreadsheet_id
+      PARAM_GOOGLE_CREDENTIALS    = var.param_google_credentials
+      PARAM_SLACK_BOT_TOKEN       = var.param_slack_bot_token
+      SLACK_SIGNING_SECRET_PARAM  = var.param_slack_signing_secret
       DYNAMODB_TABLE_NAME      = aws_dynamodb_table.slack_events.name
     }
   }
