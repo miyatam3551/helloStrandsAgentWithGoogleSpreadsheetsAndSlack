@@ -1,0 +1,8 @@
+terraform {
+ backend "s3" {
+   bucket         = "YOUR_BACKET_NAME"
+   key            = "helloStrandsAgentWithGoogleSpreadsheetsAndSlack/terraform.tfstate"
+   region         = "ap-northeast-1"
+   use_lockfile   = true
+ }
+}

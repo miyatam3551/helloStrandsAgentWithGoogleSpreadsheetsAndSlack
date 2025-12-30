@@ -1,0 +1,8 @@
+[tools]
+python = "3.14"
+uv = "0.9.20"
+terraform = "1.14.3"
+aws = "2.32.25"
+
+[env]
+_.file = ".env"
