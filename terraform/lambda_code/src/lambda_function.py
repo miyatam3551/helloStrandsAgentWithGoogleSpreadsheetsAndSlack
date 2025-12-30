@@ -1,7 +1,6 @@
 import json
 import os
 import boto3
-import threading
 from strands import Agent
 from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
@@ -20,14 +19,6 @@ def get_signing_secret():
 
     response = ssm_client.get_parameter(Name=param_name, WithDecryption=True)
     return response['Parameter']['Value']
-
-
-def process_event_async(body):
-    """バックグラウンドでイベントを処理"""
-    try:
-        handle_slack_event(body)
-    except Exception as e:
-        print(f"バックグラウンド処理エラー: {e}")
 
 
 def handler(event, context):
