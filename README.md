@@ -647,50 +647,6 @@ curl -X POST https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/invoke \
 
 ## 🐛 トラブルシューティング
 
-### エラー: `Error: Backend initialization failed`
-
-**原因:**
-- S3 バケットが存在しない
-- バケット名が間違っている
-- AWS 認証情報が設定されていない
-
-**解決方法:**
-
-```bash
-# S3 バケットを作成
-aws s3 mb s3://your-bucket-name --region ap-northeast-1
-
-# AWS 認証情報を確認
-aws sts get-caller-identity
-```
-
-### エラー: `Error: creating ECR Repository: AccessDeniedException`
-
-**原因:**
-- AWS IAM ユーザーに ECR へのアクセス権限がない
-
-**解決方法:**
-- IAM ユーザーに `AmazonEC2ContainerRegistryFullAccess` ポリシーをアタッチ
-
-### エラー: `Error: error invoking Lambda function: ... Bedrock model access`
-
-**原因:**
-- Bedrock モデルへのアクセスが許可されていない
-
-**解決方法:**
-1. AWS Console → Bedrock → Model access
-2. `jp.anthropic.claude-sonnet-4-5-20250929-v1:0` をリクエスト
-3. 承認されるまで待機（通常は即座に承認）
-
-### Docker ビルドが遅い
-
-**原因:**
-- 初回ビルドでは Python ライブラリをすべてダウンロードするため時間がかかる
-
-**解決方法:**
-- 2回目以降は Docker のキャッシュが効くため高速化されます
-- 辛抱強く待ちましょう 🙂
-
 ### API リクエストが 500 エラーを返す
 
 **デバッグ方法:**
@@ -705,41 +661,6 @@ aws logs tail /aws/lambda/hello-agent --follow
 - Bedrock モデル ID の間違い
 - Google Sheets / Slack の認証情報が未設定
 
----
-
-## 📚 次のステップ
-
-### 1. Google Sheets との連携を設定
-
-`terraform/lambda_code/src/services/google_sheets.py` に Google Sheets API の認証情報を設定します。
-
-### 2. Slack との連携を設定
-
-`terraform/lambda_code/src/services/slack_service.py` に Slack の Webhook URL を設定します。
-
-### 3. カスタムツールを追加
-
-`terraform/lambda_code/src/tools/` に新しいツールを追加して、AI の能力を拡張できます。
-
-**例: 天気情報ツール**
-
-```python
-from strands import tool
-
-@tool
-def get_weather(city: str) -> str:
-    """指定された都市の天気を取得します"""
-    # 天気 API を呼び出す処理
-    return f"{city} の天気は晴れです"
-```
-
-### 4. 本番運用への移行
-
-- **認証の追加**: API Gateway に API キーや Cognito 認証を追加
-- **モニタリング**: CloudWatch アラームの設定
-- **コスト最適化**: Lambda のメモリ・タイムアウト調整
-
----
 
 ## 🧹 クリーンアップ
 
