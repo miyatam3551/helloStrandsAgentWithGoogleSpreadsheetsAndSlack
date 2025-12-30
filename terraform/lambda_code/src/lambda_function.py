@@ -1,7 +1,7 @@
 import json
 import os
 import boto3
-from services.slack_event_handler import try_mark_event_as_processed
+from services.slack_event_handler import try_mark_event_as_processed, delete_event_record
 from utils.slack_signature_verifier import verify_slack_signature
 
 # Create clients at module level to reuse across Lambda invocations
@@ -88,12 +88,19 @@ def handler(event, context):
                raise ValueError("環境変数 STATE_MACHINE_ARN が設定されていません")
 
            # Step Functions実行を開始（非同期）
-           execution_response = sfn_client.start_execution(
-               stateMachineArn=state_machine_arn,
-               input=json.dumps(body)
-           )
-
-           print(f"Step Functions実行開始: {execution_response['executionArn']}")
+           try:
+               execution_response = sfn_client.start_execution(
+                   stateMachineArn=state_machine_arn,
+                   input=json.dumps(body)
+               )
+               print(f"Step Functions実行開始: {execution_response['executionArn']}")
+           except Exception as sfn_error:
+               # Step Functions起動失敗時は、DynamoDBレコードを削除（ロールバック）
+               print(f"Step Functions起動失敗: {sfn_error}")
+               if event_id:
+                   delete_event_record(event_id)
+               # エラーを再送出して、呼び出し元に通知
+               raise
 
            # 即座に200 OKを返す（Slackがタイムアウトしない）
            return {

@@ -58,6 +58,31 @@ def try_mark_event_as_processed(event_id: str, ttl_hours: int = 24) -> bool:
         return True
 
 
+def delete_event_record(event_id: str) -> bool:
+    """イベント記録を削除（ロールバック用）
+
+    Step Functions 起動失敗時などに、処理済みマークをロールバックするために使用。
+
+    Args:
+        event_id: Slack イベント ID
+
+    Returns:
+        削除に成功した場合は True、失敗した場合は False
+    """
+    if not table_name or not event_id:
+        return False
+
+    try:
+        table = dynamodb.Table(table_name)
+        table.delete_item(Key={'event_id': event_id})
+        print(f"イベント記録を削除しました（ロールバック）: {event_id}")
+        return True
+
+    except Exception as e:
+        print(f"DynamoDB エラー (delete_item): {e}")
+        return False
+
+
 def handle_app_mention(event_data: dict) -> dict:
     """app_mention イベントを処理
 
