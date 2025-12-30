@@ -219,15 +219,61 @@ aws sso login
 > - 複数アカウントへの切り替えが容易
 > - MFA（多要素認証）との統合
 
-### 5. Bedrock Model Access
+### 5. 認証情報の準備
 
 **なぜ必要？**
-- Claude Sonnet 4.5 モデルを利用するため
+- Lambda 関数が実行時に Google Sheets や Slack にアクセスするための認証情報が必要
+- これらの認証情報は後のステップで Parameter Store に暗号化して保存します
 
-**設定方法:**
-1. AWS Console → Bedrock → Model access
-2. `jp.anthropic.claude-sonnet-4-5-20250929-v1:0` をリクエスト
-3. 承認されるまで数分待機
+**準備する認証情報:**
+1. Google サービスアカウント認証情報（JSON ファイル）
+2. Slack Bot Token
+3. Spreadsheet ID
+
+#### 5-1. Google サービスアカウント認証情報の準備
+
+**Google Cloud Console で サービスアカウントを作成:**
+
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+2. プロジェクトを選択（または新規作成）
+3. 「IAM と管理」→「サービス アカウント」→「サービス アカウントを作成」
+4. サービスアカウント名を入力（例: `sheets-slack-agent`）
+5. 「キーを作成」→「JSON」を選択してダウンロード
+6. ダウンロードした JSON ファイルを `credentials/service-account-key.json` に配置
+
+**Google Sheets API を有効化:**
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → 「API とサービス」
+2. 「ライブラリ」→「Google Sheets API」を検索
+3. 「有効にする」をクリック
+
+**スプレッドシートへのアクセス権を付与:**
+
+1. スプレッドシートを開く
+2. 「共有」をクリック
+3. サービスアカウントのメールアドレス（`xxx@xxx.iam.gserviceaccount.com`）を追加
+4. 「編集者」権限を付与
+
+#### 5-2. Slack Bot Token の取得
+
+1. [Slack API](https://api.slack.com/apps) にアクセス
+2. 「Create New App」→「From scratch」
+3. アプリ名とワークスペースを選択
+4. 「OAuth & Permissions」→「Scopes」で以下を追加：
+   - `chat:write`
+   - `chat:write.public`
+5. 「Install to Workspace」をクリック
+6. 表示される「Bot User OAuth Token」（`xoxb-` で始まる）をコピー
+
+#### 5-3. Spreadsheet ID の確認
+
+スプレッドシートの URL から取得します：
+
+```
+https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+                                      ^^^^^^^^^^^^^^
+                                      この部分が ID
+```
 
 ---
 
@@ -265,22 +311,166 @@ terraform 1.14.3   ~/.local/share/mise/installs/terraform/1.14.3
 aws      2.32.25   ~/.local/share/mise/installs/aws/2.32.25
 ```
 
-### 3. Terraform の設定
+### 3. 環境変数の設定
 
-#### 3-1. 設定ファイルのコピー
+#### 3-1. .env ファイルのコピー
+
+```bash
+cp .env.example .env
+```
+
+**なぜこのステップが必要？**
+- `.env.example` ファイルは**テンプレート**（Git にコミット）
+- 実際の `.env` ファイルには**機密情報**（Parameter Store のパス名など）を含むため `.gitignore` で除外
+- これにより、機密情報を誤って公開するリスクを回避
+
+#### 3-2. .env の編集
+
+```bash
+vim .env
+```
+
+以下の値を**あなたの環境に合わせて**設定します：
+
+```bash
+# ============================================
+# Terraform 変数
+# ============================================
+# TF_VAR_ プレフィックスにより Terraform が自動認識します
+# これらの値は Lambda の環境変数として自動設定されます
+
+# AWS アカウント ID（aws sts get-caller-identity --query Account --output text で取得）
+TF_VAR_aws_account_id="123456789012"
+
+# Parameter Store のパス名
+# Lambda 実行時に Parameter Store からシークレットを取得する際のパスとして使用されます
+TF_VAR_param_spreadsheet_id="/your-prefix/spreadsheet-id"
+TF_VAR_param_google_credentials="/your-prefix/google-credentials"
+TF_VAR_param_slack_bot_token="/your-prefix/slack-bot-token"
+```
+
+**設定項目の説明:**
+- `TF_VAR_aws_account_id`: あなたの AWS アカウント ID（[確認方法](#aws-account-id-の確認方法)）
+- `TF_VAR_param_*`: Parameter Store のパス名（Lambda 実行時にシークレットを取得する際に使用）
+- プレフィックス（例: `/your-prefix/`）は推測されにくい、アプリケーション固有の名前を使用
+
+**AWS Account ID の確認方法:**
+```bash
+aws sts get-caller-identity --query Account --output text
+```
+
+> **💡 .env ファイル一元管理の利点**
+> - すべての設定を `.env` ファイル一つで管理（`terraform.tfvars` は不要）
+> - `TF_VAR_` プレフィックスにより Terraform が自動認識
+> - Parameter Store のパス名を一箇所で管理し、同期ミスを防止
+> - 機密情報を `.gitignore` で保護
+
+### 4. Parameter Store への認証情報の登録
+
+**なぜこのステップが必要？**
+- Lambda 関数が実行時に Google Sheets や Slack にアクセスするには、認証情報が必要
+- `.env` ファイルで設定したパス名を使って、Parameter Store に暗号化して保存します
+- **重要**: このステップは `.env` ファイルを作成した後に実行してください
+
+**前提条件:**
+- [前提条件 → 5. 認証情報の準備](#5-認証情報の準備) で以下を準備済みであること：
+  - `credentials/service-account-key.json` （Google サービスアカウント認証情報）
+  - Slack Bot Token （`xoxb-` で始まるトークン）
+  - Spreadsheet ID
+
+#### 4-1. Parameter Store への保存コマンド
+
+**`.env` ファイルで設定した環境変数を使用してコマンドを実行します:**
+
+**nushell の場合:**
+```bash
+# Google サービスアカウント認証情報を保存
+(aws ssm put-parameter
+  --name $env.TF_VAR_param_google_credentials
+  --value (cat credentials/service-account-key.json)
+  --type "SecureString"
+  --overwrite)
+
+# Slack Bot Token を保存
+(aws ssm put-parameter
+  --name $env.TF_VAR_param_slack_bot_token
+  --value "xoxb-your-slack-bot-token-here"
+  --type "SecureString"
+  --overwrite)
+
+# Spreadsheet ID を保存
+(aws ssm put-parameter
+  --name $env.TF_VAR_param_spreadsheet_id
+  --value "your-spreadsheet-id-here"
+  --type "SecureString"
+  --overwrite)
+```
+
+**bash の場合:**
+
+```bash
+# Google サービスアカウント認証情報を保存
+aws ssm put-parameter \
+  --name "$TF_VAR_param_google_credentials" \
+  --value "$(cat credentials/service-account-key.json)" \
+  --type "SecureString" \
+  --overwrite
+
+# Slack Bot Token を保存
+aws ssm put-parameter \
+  --name "$TF_VAR_param_slack_bot_token" \
+  --value "xoxb-your-slack-bot-token-here" \
+  --type "SecureString" \
+  --overwrite
+
+# Spreadsheet ID を保存
+aws ssm put-parameter \
+  --name "$TF_VAR_param_spreadsheet_id" \
+  --value "your-spreadsheet-id-here" \
+  --type "SecureString" \
+  --overwrite
+```
+
+#### 4-2. 保存の確認
+
+```bash
+# 保存されたパラメータの一覧を確認
+aws ssm describe-parameters --filters "Key=Name,Values=/your-prefix/"
+
+# 特定のパラメータの値を確認（復号化して表示）
+aws ssm get-parameter --name "/your-prefix/spreadsheet-id" --with-decryption --query "Parameter.Value" --output text
+```
+
+> **💡 Parameter Store のセキュリティ**
+> - `SecureString` タイプで暗号化保存（AWS KMS を使用）
+> - IAM ロールによるアクセス制御
+> - 値の変更履歴を保持
+> - `--overwrite` オプションで既存値を更新可能
+
+> **⚠️ 注意事項**
+> - `credentials/service-account-key.json` は `.gitignore` に追加されているため、Git にコミットされません
+> - Slack Bot Token は絶対に Git にコミットしないでください
+> - Parameter Store のパス名（プレフィックス）は推測されにくいものを使用してください
+
+### 5. Terraform Backend の設定
+
+#### 5-1. backend.tf のコピー
 
 ```bash
 cd terraform
 cp backend.tf.example backend.tf
-cp terraform.tfvars.example terraform.tfvars
 ```
 
 **なぜこのステップが必要？**
-- `*.example` ファイルは**テンプレート**（Git にコミット）
-- 実際の設定ファイルには**機密情報**（AWS アカウント ID など）を含むため `.gitignore` で除外
-- これにより、機密情報を誤って公開するリスクを回避
+- `backend.tf.example` は**テンプレート**（Git にコミット）
+- 実際の `backend.tf` には**S3バケット名**を含むため `.gitignore` で除外
+- これにより、バケット名を誤って公開するリスクを回避
 
-#### 3-2. backend.tf の編集
+> **💡 terraform.tfvars は不要**
+> - すべての変数は `.env` ファイルで `TF_VAR_*` として管理
+> - `terraform.tfvars` ファイルは作成する必要がありません
+
+#### 5-2. backend.tf の編集
 
 ```bash
 vim backend.tf
@@ -310,31 +500,9 @@ terraform {
 aws s3 mb s3://my-terraform-state-bucket-12345 --region ap-northeast-1
 ```
 
-#### 3-3. terraform.tfvars の編集
+### 6. Terraform の実行
 
-```bash
-vim terraform.tfvars
-```
-
-以下の `YOUR_AWS_ACCOUNT_ID` を**あなたの AWS アカウント ID** に置き換えます：
-
-```hcl
-aws_account_id = "123456789012"  # ← あなたの AWS アカウント ID
-```
-
-**AWS アカウント ID の確認方法:**
-
-```bash
-aws sts get-caller-identity --query Account --output text
-```
-
-**なぜアカウント ID が必要？**
-- ECR リポジトリの URI に使用
-- IAM ポリシーで ARN を生成する際に必要
-
-### 4. Terraform の実行
-
-#### 4-1. 初期化
+#### 6-1. 初期化
 
 ```bash
 terraform init
@@ -349,7 +517,7 @@ terraform init
 - `.terraform/` ディレクトリが作成される
 - S3 バケットに接続して状態ファイルを確認
 
-#### 4-2. プランの確認
+#### 6-2. プランの確認
 
 ```bash
 terraform plan
@@ -364,7 +532,7 @@ terraform plan
 - 作成されるリソース数（`Plan: X to add, 0 to change, 0 to destroy`）
 - Lambda 関数、API Gateway、ECR リポジトリなどが含まれているか
 
-#### 4-3. インフラの構築
+#### 6-3. インフラの構築
 
 ```bash
 terraform apply
@@ -393,9 +561,9 @@ Do you want to perform these actions?
   Enter a value: yes  # ← "yes" と入力
 ```
 
-### 5. デプロイの確認
+### 7. デプロイの確認
 
-#### 5-1. API エンドポイントの取得
+#### 7-1. API エンドポイントの取得
 
 ```bash
 terraform output api_endpoint
@@ -406,7 +574,7 @@ terraform output api_endpoint
 https://xxxxx.execute-api.ap-northeast-1.amazonaws.com
 ```
 
-#### 5-2. 動作確認
+#### 7-2. 動作確認
 
 ```bash
 curl -X POST https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/invoke \
@@ -425,7 +593,7 @@ curl -X POST https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/invoke \
 - API Gateway → Lambda → Bedrock の全経路が正常に動作していることを確認
 - 問題があれば、どこで失敗しているか切り分けられる
 
-#### 5-3. テストスクリプトの使用
+#### 7-3. テストスクリプトの使用
 
 **なぜテストスクリプトを使うのか？**
 - `terraform output` を自動的に取得するため、エンドポイント URL をコピー＆ペーストする手間が不要
