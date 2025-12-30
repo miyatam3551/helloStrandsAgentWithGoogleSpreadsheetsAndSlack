@@ -22,8 +22,11 @@ fi
 echo "✅ API エンドポイント: ${API_ENDPOINT}/invoke"
 echo ""
 
-# プロンプトをコマンドライン引数から取得（デフォルト値あり）
-PROMPT="${1:-Slackに「テストメッセージ」を送信してください}"
+# 環境変数から Slack チャネル名を取得（デフォルト: general）
+SLACK_TEST_CHANNEL="${SLACK_TEST_CHANNEL:-general}"
+
+# プロンプトをコマンドライン引数から取得（デフォルト値にチャネル名を埋め込み）
+PROMPT="${1:-Slack の #${SLACK_TEST_CHANNEL} チャネルに独自性にあふれる「テストメッセージ」を送信してください}"
 
 echo "📤 リクエスト送信中..."
 echo "プロンプト: ${PROMPT}"
