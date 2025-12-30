@@ -60,7 +60,9 @@ resource "aws_iam_role_policy" "lambda_ssm_access" {
          "ssm:GetParameters"
        ]
        Resource = [
-         "arn:aws:ssm:${var.aws_region}:*:parameter/bp-management/*"
+         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_spreadsheet_id}",
+         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_google_credentials}",
+         "arn:aws:ssm:${var.aws_region}:*:parameter${var.param_slack_bot_token}"
        ]
      }
    ]
