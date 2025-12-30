@@ -3,12 +3,32 @@ import os
 from strands import Agent
 from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
+from services.slack_event_handler import handle_slack_event
 
 def handler(event, context):
    """Lambda ハンドラー関数"""
    try:
-       # イベントからプロンプトを取得
+       # イベントからボディを取得
        body = json.loads(event.get('body', '{}'))
+
+       # Slack Events API のチャレンジレスポンスを処理
+       if 'challenge' in body:
+           return {
+               'statusCode': 200,
+               'body': json.dumps({'challenge': body['challenge']}),
+               'headers': {'Content-Type': 'application/json'}
+           }
+
+       # Slack Events API からのイベントを処理
+       if 'event' in body:
+           result = handle_slack_event(body)
+           return {
+               'statusCode': 200,
+               'body': json.dumps(result, ensure_ascii=False),
+               'headers': {'Content-Type': 'application/json'}
+           }
+
+       # 従来の直接呼び出し（HTTP POST /invoke）を処理
        prompt = body.get('prompt', 'テスト')
 
        # エージェントを初期化
@@ -23,10 +43,12 @@ def handler(event, context):
 
        return {
            'statusCode': 200,
-           'body': json.dumps({'message': str(response)}, ensure_ascii=False)
+           'body': json.dumps({'message': str(response)}, ensure_ascii=False),
+           'headers': {'Content-Type': 'application/json'}
        }
    except Exception as e:
        return {
            'statusCode': 500,
-           'body': json.dumps({'error': str(e)}, ensure_ascii=False)
+           'body': json.dumps({'error': str(e)}, ensure_ascii=False),
+           'headers': {'Content-Type': 'application/json'}
        }
