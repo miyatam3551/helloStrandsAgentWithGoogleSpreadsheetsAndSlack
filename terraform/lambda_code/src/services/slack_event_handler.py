@@ -93,7 +93,18 @@ def handle_app_mention(event_data: dict) -> dict:
     response = agent(clean_text)
 
     # 応答を同じチャンネルに送信
-    post_message(channel, str(response))
+    try:
+        post_message(channel, str(response))
+    except Exception as e:
+        # Slack へのメッセージ送信に失敗しても、Lambda は成功として返す
+        # これにより、Slack の無限再送を防ぐ
+        print(f"Slack へのメッセージ送信に失敗しました: {e}")
+        return {
+            'success': False,
+            'message': f'Slack へのメッセージ送信に失敗: {str(e)}',
+            'channel': channel,
+            'response': str(response)
+        }
 
     return {
         'success': True,
