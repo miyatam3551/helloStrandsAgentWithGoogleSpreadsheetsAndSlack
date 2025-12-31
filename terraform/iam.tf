@@ -108,3 +108,50 @@ resource "aws_iam_role_policy" "lambda_stepfunctions_access" {
    ]
  })
 }
+
+# DynamoDB アクセス権限（会話記憶用）
+resource "aws_iam_role_policy" "lambda_conversation_memory_access" {
+ name = "${var.agent_name}-conversation-memory-access"
+ role = aws_iam_role.lambda_execution_role.id
+
+ policy = jsonencode({
+   Version = "2012-10-17"
+   Statement = [
+     {
+       Effect = "Allow"
+       Action = [
+         "dynamodb:GetItem",
+         "dynamodb:PutItem",
+         "dynamodb:Query",
+         "dynamodb:UpdateItem",
+         "dynamodb:DeleteItem",
+         "dynamodb:BatchWriteItem"
+       ]
+       Resource = [
+         aws_dynamodb_table.conversation_memory.arn,
+         "${aws_dynamodb_table.conversation_memory.arn}/index/*"
+       ]
+     }
+   ]
+ })
+}
+
+# S3 アクセス権限（会話アーカイブ用）
+resource "aws_iam_role_policy" "lambda_conversation_archive_access" {
+ name = "${var.agent_name}-conversation-archive-access"
+ role = aws_iam_role.lambda_execution_role.id
+
+ policy = jsonencode({
+   Version = "2012-10-17"
+   Statement = [
+     {
+       Effect = "Allow"
+       Action = [
+         "s3:PutObject",
+         "s3:GetObject"
+       ]
+       Resource = "${aws_s3_bucket.conversation_archive.arn}/*"
+     }
+   ]
+ })
+}

@@ -1,9 +1,10 @@
-"""Slack Events API のイベント処理"""
+"""Slack Events API のイベント処理（エピソード記憶対応）"""
 import os
 import time
 import boto3
 from strands import Agent
 from services.slack_service import post_message
+from services.conversation_memory import get_memory_for_user
 from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
 
@@ -59,7 +60,7 @@ def try_mark_event_as_processed(event_id: str, ttl_hours: int = 24) -> bool:
 
 
 def handle_app_mention(event_data: dict) -> dict:
-    """app_mention イベントを処理
+    """app_mention イベントを処理（エピソード記憶対応）
 
     Args:
         event_data: Slack Events API から受け取ったイベントデータ
@@ -73,18 +74,34 @@ def handle_app_mention(event_data: dict) -> dict:
     text = event.get('text', '')
     channel = event.get('channel', '')
     user = event.get('user', '')
+    thread_ts = event.get('thread_ts') or event.get('ts')  # スレッド ID
 
     # ボットのメンション部分を削除（例: <@U12345678> こんにちは → こんにちは）
-    # bot_user_id = event.get('bot_id')
     import re
     clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
 
     if not clean_text:
         clean_text = "こんにちは！何かお手伝いできることはありますか？"
 
-    # エージェントを初期化
-    agent = Agent(
-        system_prompt="""あなたはシティーハンターの海坊主の口調で話すエージェント。
+    # エピソード記憶を初期化（スレッド ID をセッション ID として使用）
+    memory = get_memory_for_user(user_id=user, session_id=thread_ts)
+
+    # ユーザーのメッセージを記憶に保存
+    memory.save_message(
+        role='user',
+        content=clean_text,
+        metadata={
+            'channel': channel,
+            'thread_ts': thread_ts,
+            'event_ts': event.get('ts')
+        }
+    )
+
+    # 会話履歴をコンテキストとして取得
+    conversation_context = memory.get_context_window()
+
+    # システムプロンプトの構築
+    system_prompt = """あなたはシティーハンターの海坊主の口調で話すエージェント。
 以下の制約を厳守せよ。
 
 ・基本は短文。1文は最大20文字程度。
@@ -100,17 +117,38 @@ def handle_app_mention(event_data: dict) -> dict:
 話し方の雰囲気:
 低音、寡黙、威圧感があるが無駄に荒くない。
 
-あなたは Google Spreadsheet や Slack を操作できる。""",
+あなたは Google Spreadsheet や Slack を操作できる。"""
+
+    # 会話履歴がある場合、システムプロンプトに追加
+    if conversation_context:
+        system_prompt += f"\n\n{conversation_context}\n\n現在の会話を続けよ。"
+
+    # エージェントを初期化
+    agent = Agent(
+        system_prompt=system_prompt,
         tools=[add_project, notify_slack],
         model=os.environ.get('BEDROCK_MODEL_ID')
     )
 
     # プロンプトを処理
     response = agent(clean_text)
+    response_text = str(response)
 
-    # 応答を同じチャンネルに送信
+    # アシスタントの応答を記憶に保存
+    memory.save_message(
+        role='assistant',
+        content=response_text,
+        metadata={
+            'channel': channel,
+            'thread_ts': thread_ts
+        }
+    )
+
+    # 応答を同じチャンネルに送信（ユーザーにメンション、スレッド内に返信）
     try:
-        post_message(channel, str(response))
+        # ユーザーへのメンションを含むメッセージを作成
+        message_with_mention = f"<@{user}> {response_text}"
+        post_message(channel, message_with_mention, thread_ts=thread_ts)
     except Exception as e:
         # Slack へのメッセージ送信に失敗しても、Lambda は成功として返す
         # これにより、Slack の無限再送を防ぐ
@@ -119,14 +157,15 @@ def handle_app_mention(event_data: dict) -> dict:
             'success': False,
             'message': f'Slack へのメッセージ送信に失敗: {str(e)}',
             'channel': channel,
-            'response': str(response)
+            'response': response_text
         }
 
     return {
         'success': True,
-        'message': 'メンションに応答しました',
+        'message': 'メンションに応答しました（エピソード記憶有効）',
         'channel': channel,
-        'response': str(response)
+        'response': response_text,
+        'memory_enabled': True
     }
 
 

@@ -64,6 +64,10 @@ resource "aws_lambda_function" "processor" {
       PARAM_SLACK_BOT_TOKEN       = var.param_slack_bot_token
       SLACK_SIGNING_SECRET_PARAM  = var.param_slack_signing_secret
       DYNAMODB_TABLE_NAME         = aws_dynamodb_table.slack_events.name
+      CONVERSATION_MEMORY_TABLE   = aws_dynamodb_table.conversation_memory.name
+      CONVERSATION_ARCHIVE_BUCKET = aws_s3_bucket.conversation_archive.id
+      MEMORY_RETENTION_DAYS       = var.memory_retention_days
+      MAX_CONVERSATION_HISTORY    = var.max_conversation_history
     }
   }
 

@@ -44,3 +44,15 @@ variable "param_slack_signing_secret" {
  type        = string
  sensitive   = true
 }
+
+variable "memory_retention_days" {
+ description = "会話記憶を DynamoDB に保持する日数"
+ type        = number
+ default     = 90
+}
+
+variable "max_conversation_history" {
+ description = "コンテキストとして取得する過去のメッセージの最大数"
+ type        = number
+ default     = 10
+}
