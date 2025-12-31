@@ -3,8 +3,7 @@
 # ============================================================================
 # 目的: エージェントの会話履歴とユーザーのコンテキストを保存するメモリを作成
 # 参考: https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main/04-infrastructure-as-code/terraform/end-to-end-weather-agent
-
-data "aws_region" "current" {}
+# 参考: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrockagentcore_memory_strategy
 
 # ============================================================================
 # Memory - For Persistent Conversation Context
@@ -12,61 +11,13 @@ data "aws_region" "current" {}
 
 resource "aws_bedrockagentcore_memory" "memory" {
   name                  = "${replace(var.agent_name, "-", "_")}_memory"
-  description           = "Memory for ${var.agent_name} to maintain conversation context"
-  event_expiry_duration = 30 # Days
-
-  tags = {
-    Name        = "${var.agent_name}-memory"
-    ManagedBy   = "Terraform"
-    Project     = "HelloStrandsAgent"
-  }
+  event_expiry_duration = 90 # Days
 }
 
-# ============================================================================
-# Memory Initialization - Populate Memory with Initial Context
-# ============================================================================
-
-# Initialize memory after it is created
-resource "null_resource" "initialize_memory" {
-  # Trigger re-initialization if memory ID changes
-  triggers = {
-    memory_id = aws_bedrockagentcore_memory.memory.id
-    region    = data.aws_region.current.id
-  }
-
-  # Execute Python script to initialize memory
-  provisioner "local-exec" {
-    command     = "python3 ${path.module}/scripts/init-memory.py"
-    working_dir = path.module
-
-    environment = {
-      MEMORY_ID  = aws_bedrockagentcore_memory.memory.id
-      AWS_REGION = data.aws_region.current.id
-    }
-  }
-
-  # Ensure memory exists before initialization
-  depends_on = [
-    aws_bedrockagentcore_memory.memory
-  ]
-}
-
-# ============================================================================
-# Outputs
-# ============================================================================
-
-output "memory_id" {
-  description = "Bedrock AgentCore Memory ID"
-  value       = aws_bedrockagentcore_memory.memory.id
-}
-
-output "memory_arn" {
-  description = "Bedrock AgentCore Memory ARN"
-  value       = aws_bedrockagentcore_memory.memory.arn
-}
-
-output "memory_initialization_status" {
-  description = "Status of memory initialization"
-  value       = "Memory initialized successfully"
-  depends_on  = [null_resource.initialize_memory]
+resource "aws_bedrockagentcore_memory_strategy" "user_pref" {
+  name        = "user_preference_strategy_${replace(var.agent_name, "-", "_")}"
+  memory_id   = aws_bedrockagentcore_memory.memory.id
+  type        = "USER_PREFERENCE"
+  description = "User preference tracking strategy"
+  namespaces  = ["/strategies/{memoryStrategyId}/actors/{actorId}"]
 }
