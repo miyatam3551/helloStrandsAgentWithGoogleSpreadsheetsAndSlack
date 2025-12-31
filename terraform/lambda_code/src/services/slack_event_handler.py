@@ -3,6 +3,8 @@ import os
 import time
 import boto3
 from strands import Agent
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 from services.slack_service import post_message
 from tools.spreadsheet_tools import add_project
 from tools.slack_tools import notify_slack
@@ -73,17 +75,26 @@ def handle_app_mention(event_data: dict) -> dict:
     text = event.get('text', '')
     channel = event.get('channel', '')
     user = event.get('user', '')
+    thread_ts = event.get('thread_ts') or event.get('ts')  # スレッドまたは元メッセージのタイムスタンプ
 
     # ボットのメンション部分を削除（例: <@U12345678> こんにちは → こんにちは）
-    # bot_user_id = event.get('bot_id')
     import re
     clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
 
     if not clean_text:
         clean_text = "こんにちは！何かお手伝いできることはありますか？"
 
-    # エージェントを初期化
-    agent = Agent(
+    # AgentCore Memory の設定
+    memory_config = AgentCoreMemoryConfig(
+        user_id=user,
+        session_id=thread_ts  # スレッドをセッションとして使用
+    )
+
+    # セッションマネージャーを使用してエージェントを初期化
+    session_manager = AgentCoreMemorySessionManager(config=memory_config)
+
+    # エージェントを初期化（セッションマネージャー経由）
+    agent = session_manager.create_agent(
         system_prompt="""あなたはシティーハンターの海坊主の口調で話すエージェント。
 以下の制約を厳守せよ。
 
@@ -100,7 +111,8 @@ def handle_app_mention(event_data: dict) -> dict:
 話し方の雰囲気:
 低音、寡黙、威圧感があるが無駄に荒くない。
 
-あなたは Google Spreadsheet や Slack を操作できる。""",
+あなたは Google Spreadsheet や Slack を操作できる。
+ユーザーとの過去の会話を覚えていて、ユーザーの好みや傾向を理解している。""",
         tools=[add_project, notify_slack],
         model=os.environ.get('BEDROCK_MODEL_ID')
     )
@@ -108,9 +120,9 @@ def handle_app_mention(event_data: dict) -> dict:
     # プロンプトを処理
     response = agent(clean_text)
 
-    # 応答を同じチャンネルに送信
+    # 応答を同じスレッド内でユーザーにメンションして送信
     try:
-        post_message(channel, str(response))
+        post_message(channel, str(response), thread_ts=thread_ts, user_id=user)
     except Exception as e:
         # Slack へのメッセージ送信に失敗しても、Lambda は成功として返す
         # これにより、Slack の無限再送を防ぐ
@@ -126,6 +138,8 @@ def handle_app_mention(event_data: dict) -> dict:
         'success': True,
         'message': 'メンションに応答しました',
         'channel': channel,
+        'user': user,
+        'thread_ts': thread_ts,
         'response': str(response)
     }
 
