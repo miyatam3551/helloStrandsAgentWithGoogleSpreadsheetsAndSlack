@@ -40,6 +40,16 @@ resource "aws_iam_role_policy" "bedrock_access" {
          "arn:aws:bedrock:*::foundation-model/*",
          "arn:aws:bedrock:*:${var.aws_account_id}:inference-profile/*"
        ]
+     },
+     {
+       Effect = "Allow"
+       Action = [
+         "bedrock-agentcore:GetMemory",
+         "bedrock-agentcore:PutMemoryItem",
+         "bedrock-agentcore:DeleteMemoryItem",
+         "bedrock-agentcore:ListMemories"
+       ]
+       Resource = aws_bedrockagentcore_memory.memory.arn
      }
    ]
  })

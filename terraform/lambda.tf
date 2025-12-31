@@ -20,6 +20,8 @@ resource "aws_lambda_function" "agent" {
       SLACK_SIGNING_SECRET_PARAM  = var.param_slack_signing_secret
       DYNAMODB_TABLE_NAME         = aws_dynamodb_table.slack_events.name
       STATE_MACHINE_ARN           = aws_sfn_state_machine.slack_event_processor.arn
+      # Bedrock AgentCore Memory の設定
+      MEM_ID                      = aws_bedrockagentcore_memory.memory.id
     }
   }
 
