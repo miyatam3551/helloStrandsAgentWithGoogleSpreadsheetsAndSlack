@@ -40,6 +40,23 @@ resource "aws_iam_role_policy" "bedrock_access" {
          "arn:aws:bedrock:*::foundation-model/*",
          "arn:aws:bedrock:*:${var.aws_account_id}:inference-profile/*"
        ]
+     },
+     {
+       Effect = "Allow"
+       Action = [
+         "bedrock:Retrieve",
+         "bedrock:RetrieveAndGenerate",
+         "bedrock:GetKnowledgeBase",
+         "bedrock-agent:*"
+       ]
+       Resource = "*"
+     },
+     {
+       Effect = "Allow"
+       Action = [
+         "aoss:APIAccessAll"
+       ]
+       Resource = "*"
      }
    ]
  })
