@@ -21,8 +21,7 @@ resource "aws_lambda_function" "agent" {
       DYNAMODB_TABLE_NAME         = aws_dynamodb_table.slack_events.name
       STATE_MACHINE_ARN           = aws_sfn_state_machine.slack_event_processor.arn
       # Bedrock AgentCore Memory の設定
-      MEM_ID                      = var.bedrock_memory_id
-      MEMORY_STRATEGY_ID          = var.bedrock_memory_strategy_id
+      MEM_ID                      = aws_bedrockagentcore_memory.memory.id
     }
   }
 

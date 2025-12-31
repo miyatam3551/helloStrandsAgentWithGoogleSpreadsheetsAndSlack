@@ -44,15 +44,3 @@ variable "param_slack_signing_secret" {
  type        = string
  sensitive   = true
 }
-
-variable "bedrock_memory_id" {
- description = "Bedrock AgentCore Memory ID (例: sample_session_memory-XXXXXXXXXXXX)"
- type        = string
- sensitive   = true
-}
-
-variable "bedrock_memory_strategy_id" {
- description = "Bedrock AgentCore Memory Strategy ID (例: preference_builtin_XXXXXX-XXXXXXXXXX)"
- type        = string
- sensitive   = true
-}

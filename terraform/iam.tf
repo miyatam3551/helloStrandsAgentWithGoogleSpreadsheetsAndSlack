@@ -44,19 +44,12 @@ resource "aws_iam_role_policy" "bedrock_access" {
      {
        Effect = "Allow"
        Action = [
-         "bedrock:Retrieve",
-         "bedrock:RetrieveAndGenerate",
-         "bedrock:GetKnowledgeBase",
-         "bedrock-agent:*"
+         "bedrock-agentcore:GetMemory",
+         "bedrock-agentcore:PutMemoryItem",
+         "bedrock-agentcore:DeleteMemoryItem",
+         "bedrock-agentcore:ListMemories"
        ]
-       Resource = "*"
-     },
-     {
-       Effect = "Allow"
-       Action = [
-         "aoss:APIAccessAll"
-       ]
-       Resource = "*"
+       Resource = aws_bedrockagentcore_memory.memory.arn
      }
    ]
  })
